@@ -32,7 +32,6 @@ fileExists = False
 fullPath = ''
 #checking filename initially to see it can be added 
 def checkTransfer(filename):
-    print("in checktransfer")
     global inTransfer #global set that makes sure file is not already attempting be transfered from another client
     canTransfer = False
     if filename in inTransfer:
@@ -42,26 +41,20 @@ def checkTransfer(filename):
     else: #unique filename,add
         canTransfer = True
         inTransfer.add(filename)
-    #release lock
-   # lock.release()
     return canTransfer
 #for receiving msg and filename
-#returns int msg length 
 def framedRecv(self):
     state = "getbytes"
     payload = ""
-    
     global buff
     lengthOfMsg = 0
     while 1:
         msg = self.sock.recv(1024) #receives 1 kn of data
-        #print("msg is: ", msg)
         buff+=msg #adds msg to buffer
         if len(msg) ==0: #no msg 
             if len(buff)!=0:
                 print("msg incomplete")
             return None
-        print(state)
         if state == "getbytes": #separates frame
             
             match = re.match(b'([^:]+):(.*)',buff,re.DOTALL | re.MULTILINE)
@@ -78,7 +71,6 @@ def framedRecv(self):
             
             if len(buff) >= lengthOfMsg:
                 payload = buff[0: lengthOfMsg]
-                print("payload: ", payload)
                 buff = buff[lengthOfMsg:]
         return payload #bytes from frame 
 lock = Lock() 
@@ -88,70 +80,39 @@ class client1(Thread):
         self.sock, self.addr = sockAddress
         
     def run(self):
-        print("thread1...connecting from: ",self.addr)
+        os.write(1,("thread connecting from:..... ").encode())
+        host, port = self.addr
+        os.write(1,(host).encode())
+        os.write(1,("\n").encode())
         while 1:
             lock.acquire() #blocks one thread 
-            fileName = framedRecv(self)
+            fileName = framedRecv(self) #gets filename from msg
             os.write(1,("filename: ").encode())
+            os.write(1,("\n").encode())
             os.write(1,fileName)
-            if checkTransfer(fileName):
-                lock.release()#makes resource available to another thread
-                ##
-                path = os.getcwd()
-                filePath = path+'/'+fileName.decode()
-                print(filePath)
-                if os.path.exists(fileName.decode()):
+            if checkTransfer(fileName): #if file is able to be transferred meaning it was not already in set()
+                lock.release()#makes resource available to another thread 
+        
+                path = os.getcwd() #gets path of current directory 
+                filePath = path+'/'+fileName.decode() #getting full path for filename
+            
+                if os.path.exists(fileName.decode()): #remove old file 
                     os.remove(fileName.decode())
                 if os.path.isfile(filePath):
-                    print("file already exits")
+                    os.write(1,("file already exists").encode())
                     self.sock.send("file exists".encode())
                     sys.exit(0)
                 self.sock.send("preparing to write to file".encode())
                 f = open(fileName.decode(),'wb')
-                
-                
-                #open and write file 
-                print("writing to file......")
+                #open and write file
+                os.write(1,("writing to file....... ").encode())
                 fileData = framedRecv(self)
-                f.write(fileData)
-                #lock.release()
-            self.sock.close()
+                f.write(fileData)#writes file 
+            self.sock.close()#closes socket
             return
-                
-                
-                #framed receive and write file
             
 while True:
     conn = s.accept() # wait until incoming connection request (and accept it)
     server = client1(conn)
-    server.start()
-   # if os.fork() == 0:      # child becomes server
-    #    if fileExists==False: 
-            
-           # filePath = os.path.expanduser('~/Documents/TCPfilelab/p2-tcp-framing-Nicole-favela/TCPlab/TransferFiles') #finds directory so it can create the file 
-    
-           # fileName = conn.recv(1024).decode()
-           # os.write(1, fileName.encode()) #
-          #  if os.path.exists(filePath):
-               # fullPath = os.path.join(filePath,fileName)#accesses text file
-               # try:
-              #      f = open(fullPath, 'x') #createfile in 
-             #       os.write(1, ("file created").encode())
-            #        f.close()
-             #       fileExists = True
-           #         conn.send("ok").encode()
-          #      except:
-         #           os.write(2, ("file exists already").encode())
-            #        fileExists = True
-        #    conn.send(b"Ok")
-       # framedMsg = conn.recv(1024).decode()
-       # print("framed msg", framedMsg)
-       # f = open(fullPath, 'w')
-       # f.write(framedMsg)#writes contents to framedMsg
-       # f.close()
-      #  f = open(fullPath,'r') #opens file to read it
-     #   print(f.read())
-    #    os.write(1,("connected by: ").encode())
-   #     os.write(1,addr[0].encode())#prints local host 
-  #      conn.shutdown(socket.SHUT_WR)#closes socket connection 
-
+    server.start()#starts thread
+   
